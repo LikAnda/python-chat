@@ -3,6 +3,7 @@ import sys
 import time
 import socket
 import threading
+import datetime
 
 embed = r"""
  ___      _   _                ___ _         _   
@@ -11,12 +12,23 @@ embed = r"""
 |_|  \_, |\__|_||_\___/_||_|  \___|_||_\__,_|\__|
      |__/                                        
 """
+help_embed = r"""
+======[Commandes]======
+* /help : voir la liste des commandes disponibles
+* /leave : se déconnecter du chat
+=======================
+"""
 
 def slowPrint(s):
     for c in s :
         sys.stdout.write(c)
         sys.stdout.flush()
         time.sleep(0.01)
+
+# effacer la ligne précédente
+def erase_line():
+    sys.stdout.write("\033[F")
+    sys.stdout.write("\033[K")
 
 def is_ipv4_address(address:str) -> bool:
     parts = address.split(".")
@@ -48,9 +60,18 @@ def select_port() -> int:
             choice_port = False
     return port
 
+# gestion des commandes
+def chat_commands(msg:str, conn, name):
+    global clients
+    if msg == "/help":
+        conn.send(help_embed.encode())
+    else:
+        command_not_found_embed = "\nLa commande n'existe pas, tapez '/help' pour voir la liste des commandes disponibles\n"
+        conn.send(command_not_found_embed.encode())
 
 def host():
-    host = '127.0.0.1'
+    global clients
+    host = "127.0.0.1"
     port = 55555
     clients = {} # utilisateurs connectés
 
@@ -66,13 +87,18 @@ def host():
         wait_msg = True
         while wait_msg:
             msg = conn.recv(1024).decode()
-            if msg == 'quit':
+            if msg == "/leave":
                 conn.close()
                 del clients[name]
                 broadcast(f"{name} a quitté le chat.")
-                wait_msg = False
+            elif msg[0] == "/":
+                print(f"L'utilisateur [{name}] a utilisé la commande '{msg}'")
+                chat_commands(msg, conn, name)
             else:
-                broadcast(f"{name}: {msg}")
+                time = datetime.datetime.now().time()
+                time_format = f"{time.hour}:{time.minute}:{time.second}"
+                broadcast(f"[{time_format}]{name}: {msg}")
+                
 
     # envoie message à tous les clients
     def broadcast(msg):
@@ -114,6 +140,7 @@ def client():
         client_socket.send(username.encode())
         while True:
             msg = input()
+            erase_line()
             client_socket.send(msg.encode())
 
     # config client
